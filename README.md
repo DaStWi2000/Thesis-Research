@@ -1,2 +1,2 @@
-# Thesis_Research
-Deep Neural Network
+# Thesis Research
+Using Deep Neural Networks for Acoustic Underwater Channel Estimation in non-LTI systems
