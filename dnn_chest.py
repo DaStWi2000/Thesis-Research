@@ -68,10 +68,15 @@ class ChEst(nn.Module):
         return x
 
 
-net = ChEst()
-#net.load_state_dict(torch.load(r"C:\Users\dswil\Documents\UA Electrical Engineering Degree\THESIS RESEARCH\model"))
 # Look into MATLAB DNN package to import Pytorch model
-
+dev = ""
+if torch.cuda.is_available():
+  dev = "cuda:0"
+else:
+  dev = "cpu"
+print(dev, "used")
+net = ChEst().to(dev)
+#net.load_state_dict(torch.load(r"C:\Users\dswil\Documents\UA Electrical Engineering Degree\THESIS RESEARCH\model"))
 criterion = nn.L1Loss()
 optimizer = optim.Adam(net.parameters())
 optimizer.zero_grad()
@@ -80,13 +85,14 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, 
 for epoch in range(2):
     running_loss = 0.0
     for i, data in enumerate(trainloader,0):
+        usb, r, h_ls, h = data['usb'][0].to(dev), data['r'][0].to(dev), data['h_ls'][0].to(dev), data['h'][0].to(dev)
         optimizer.zero_grad()
-        hidden = torch.zeros((2*cir_length))
-        output = torch.zeros((num_blk*sym_blk,2*cir_length))
+        hidden = torch.zeros((2*cir_length)).to(dev)
+        output = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
         for j in range(0,num_blk*sym_blk):
-            output[j][:] = net(torch.cat((data['usb'][0][j],data['r'][0][j],data['h_ls'][0][j//sym_blk],data['h_ls'][0][j//sym_blk+num_blk])).float(),hidden.float())
+            output[j][:] = net(torch.cat((usb[j],r[j],h_ls[j//sym_blk],h_ls[j//sym_blk+num_blk])).float(),hidden.float())
             hidden = output[j][:]
-        loss = criterion(output, data['h'][0])
+        loss = criterion(output, h)
         loss.backward()
         running_loss += loss.item()
         optimizer.step()
