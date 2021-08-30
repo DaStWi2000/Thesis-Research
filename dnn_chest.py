@@ -34,21 +34,21 @@ class ChEstDataset(torch.utils.data.Dataset):
                     self.mat_files.append(os.path.join(root_dir,file))
 
     def __len__(self):
-        return len(self.mat_files*num_blk)
+        return len(self.mat_files*num_blk*sym_blk)
 
     def __getitem__(self, idx):
         # Get working with csv/non-MAT file
-        mat_file = scipy.io.loadmat(self.mat_files[idx//num_blk])
+        mat_file = scipy.io.loadmat(self.mat_files[idx//(num_blk*sym_blk)])
         tx = mat_file['tx_symbols']
-        tx = tx[idx%num_blk*sym_blk:(idx%num_blk+1)*sym_blk,0]
+        tx = tx[idx%(num_blk*sym_blk)]
         y = mat_file['y']
-        y = y[idx%num_blk*sym_blk:(idx%num_blk+1)*sym_blk,0]
+        y = y[idx%(num_blk*sym_blk)]
         y = numpy.concatenate((y.real,y.imag))
         cirmat_ls = mat_file['cirmat_ls']
-        cirmat_ls = cirmat_ls[idx%num_blk]
+        cirmat_ls = cirmat_ls[(idx%(num_blk*sym_blk))//sym_blk]
         cirmat_ls = numpy.concatenate((cirmat_ls.real,cirmat_ls.imag))
         cirmat = mat_file['cirmat']
-        cirmat = cirmat[idx%num_blk*sym_blk]
+        cirmat = cirmat[idx%(num_blk*sym_blk)]
         cirmat = numpy.concatenate((cirmat.real,cirmat.imag))
         sample = {'usb' : torch.tensor(tx), 'r' : torch.tensor(y), 'h_ls' : torch.tensor(cirmat_ls), 'h' : torch.tensor(cirmat)}
         return sample
@@ -57,7 +57,7 @@ class ChEstDataset(torch.utils.data.Dataset):
 class ChEst(nn.Module):
     def __init__(self):
         super(ChEst,self).__init__()
-        self.fc1 = nn.Linear(sym_blk+2*sym_blk+2*cir_length+2*cir_length,512)
+        self.fc1 = nn.Linear(1+2+cir_length*2+cir_length*2,512)
         self.fc2 = nn.Linear(512,256)
         self.fc3 = nn.Linear(256,128)
         self.fc4 = nn.Linear(128,cir_length*2)
@@ -83,23 +83,24 @@ criterion = nn.L1Loss()
 optimizer = optim.Adam(net.parameters())
 optimizer.zero_grad()
 trainset = ChEstDataset(r"Dataset", SNR, False)
-files_ind = list(range(0,len(trainset)//num_blk))
+files_ind = list(range(0,len(trainset)//(sym_blk*num_blk)))
 random.shuffle(files_ind)
 for epoch in range(2):
     running_loss = 0.0
     for i, data in enumerate(files_ind,0):
-        sample_indices = list(range(num_blk*data,num_blk*(data+1)))
+        sample_indices = list(range(num_blk*sym_blk*data,num_blk*sym_blk*(data+1)))
         hidden = torch.zeros((2*cir_length)).to(dev)
-        act_channels = torch.zeros((num_blk,2*cir_length)).to(dev)
-        pred_channels = torch.zeros((num_blk,2*cir_length)).to(dev)
+        act_channels = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
+        pred_channels = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
+        optimizer.zero_grad()
         for k in iter(sample_indices):
-            index = k % num_blk
+            index = k % (num_blk*sym_blk)
             sample = trainset[k]
             usb, r, h_ls, h = sample['usb'].to(dev), sample['r'].to(dev), sample['h_ls'].to(dev), sample['h'].to(dev)
-            pred_channels[index,:] = hidden
-            optimizer.zero_grad()
             hidden = net(torch.cat((usb,r,h_ls)).float().to(dev),hidden)
+            pred_channels[index,:] = hidden
             act_channels[index,:] = h
+            print(i+1, index)
         loss = criterion(pred_channels, act_channels)
         loss.backward()
         running_loss += loss.item()
