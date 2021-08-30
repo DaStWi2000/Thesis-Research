@@ -96,11 +96,11 @@ for epoch in range(2):
             index = k % num_blk
             sample = trainset[k]
             usb, r, h_ls, h = sample['usb'].to(dev), sample['r'].to(dev), sample['h_ls'].to(dev), sample['h'].to(dev)
-            pred_channels[index,:] = h
+            pred_channels[index,:] = hidden
             optimizer.zero_grad()
             hidden = net(torch.cat((usb,r,h_ls)).float().to(dev),hidden)
-            act_channels[index,:] = hidden
-        loss = criterion(hidden, h)
+            act_channels[index,:] = h
+        loss = criterion(pred_channels, act_channels)
         loss.backward()
         running_loss += loss.item()
         optimizer.step()
