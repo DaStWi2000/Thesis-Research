@@ -78,57 +78,56 @@ else:
   dev = "cpu"
 print(dev, "used")
 net = ChEst().to(dev)
-#net.load_state_dict(torch.load(r"C:\Users\dswil\Documents\UA Electrical Engineering Degree\THESIS RESEARCH\model"))
-criterion = nn.L1Loss()
-optimizer = optim.Adam(net.parameters())
-optimizer.zero_grad()
-trainset = ChEstDataset(r"Dataset", SNR, False)
-files_ind = list(range(0,len(trainset)//num_blk))
-random.shuffle(files_ind)
-for epoch in range(2):
-    running_loss = 0.0
+# criterion = nn.L1Loss()
+# optimizer = optim.Adam(net.parameters())
+# optimizer.zero_grad()
+# trainset = ChEstDataset(r"Dataset", SNR, False)
+# files_ind = list(range(0,len(trainset)//num_blk))
+# random.shuffle(files_ind)
+# for epoch in range(2):
+#     running_loss = 0.0
+#     for i, data in enumerate(files_ind,0):
+#         sample_indices = list(range(num_blk*data,num_blk*(data+1)))
+#         for k in iter(sample_indices):
+#             sample = trainset[k]
+#             usb, r, h_ls, h = sample['usb'].to(dev), sample['r'].to(dev), sample['h_ls'].to(dev), sample['h'].to(dev)
+#             optimizer.zero_grad()
+#             hidden = torch.zeros((2*cir_length)).to(dev)
+#             hidden = net(torch.cat((usb,r,h_ls)).float().to(dev),hidden)
+#             loss = criterion(hidden, h)
+#             loss.backward()
+#             running_loss += loss.item()
+#             optimizer.step()
+#         print("File ", i+1, " Done!")
+#         if (i+1) % 100 == 0:
+#             print('[%d, %5d] loss: %f' %
+#                   (epoch + 1, i + 1, running_loss / 100))
+#             running_loss = 0.0
+#
+# torch.save(net, "model")
+net = torch.load("model")
+testset = ChEstDataset(r"Dataset", SNR, True)
+files_ind = list(range(0,len(testset)))
+num_bits = 0
+with torch.no_grad():
     for i, data in enumerate(files_ind,0):
-        sample_indices = list(range(num_blk*data,num_blk*(data+1)))
-        for k in iter(sample_indices):
-            sample = trainset[k]
-            usb, r, h_ls, h = sample['usb'].to(dev), sample['r'].to(dev), sample['h_ls'].to(dev), sample['h'].to(dev)
-            optimizer.zero_grad()
-            hidden = torch.zeros((2*cir_length)).to(dev)
+        sample_indices = list(range(0,sym_blk*num_blk))
+        hidden = torch.zeros((2*cir_length)).to(dev)
+        act_channels = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
+        pred_channels = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
+        sample = testset[k]
+        for ind in iter(sample_indices):
+            usb, r, h_ls, h = torch.tensor(sample['usb'][idx]).to(dev), sample['r'][idx], sample['h_ls'][idx//sym_blk], sample['h'][idx]
+            r = torch.tensor(numpy.concatenate((r.real,r.imag))).to(dev)
+            h_ls = torch.tensor(numpy.concatenate((h_ls.real,h_ls.imag))).to(dev)
+            h = torch.tensor(numpy.concatenate((h.real,h.imag))).to(dev)
             hidden = net(torch.cat((usb,r,h_ls)).float().to(dev),hidden)
-            loss = criterion(hidden, h)
-            loss.backward()
-            running_loss += loss.item()
-            optimizer.step()
+            pred_channels[idx,:] = hidden
+            act_channels[idx,:] = h
+        numpy.savetxt("h.csv", act_channels.numpy(), delimiter=",")
+        numpy.savetxt("h_hat.csv", pred_channels.numpy(), delimiter=",")
         print("File ", i+1, " Done!")
-        if (i+1) % 100 == 0:
-            print('[%d, %5d] loss: %f' %
-                  (epoch + 1, i + 1, running_loss / 100))
-            running_loss = 0.0
-
-torch.save(net, "model")
-# testset = ChEstDataset(r"Dataset", SNR, True)
-# testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=True, num_workers=0)
-# num_bits = 0
-# with torch.no_grad():
-#     for data in testloader:
-#         inputs, labels = data
-#         hidden = torch.zeros(400)
-#         output = torch.zeros((12,400))
-#         rx_sym = numpy.zeros(4800,'complex64')
-#         tx_sym = numpy.zeros(4800,'complex64')
-#         for i in range(0,num_blk*sym_blk):
-#             output[i][:] = net(inputs[0][i],output[i-1][:])
-#             rx_sym[i*400:(i+1)*400] = inputs[0][i][800:1200].numpy() + 1j*inputs[0][i][1200:1600].numpy()
-#             tx_sym[i*400:(i+1)*400] = inputs[0][i][400:800].numpy()
-#         output = output.numpy()
-#         output = output[:,0:200] + 1j*output[:,200:]
-#         conv_mat = numpy.zeros((4800,400),'complex64')
-#         tx_rec = numpy.zeros(4800,'complex64')
-#         for i in range(0, num_blk):
-#             conv_mat[i*400:round((i+.5)*400),:] = scipy.linalg.toeplitz(output[i,:],numpy.zeros(400))
-#             conv_mat[round((i+.5)*400):(i+1)*400,:] =  scipy.linalg.toeplitz(numpy.zeros(200),numpy.append(numpy.append(numpy.zeros(1),output[i,::-1]),numpy.zeros(199)))
-#             tx_rec[i*400:(i+1)*400] = spsolve(conv_mat[i*400:(i+1)*400],rx_sym[i*400:(i+1)*400])
-#         num_bits = num_bits + sum(abs(numpy.sign(numpy.real(tx_rec))-tx_sym))/2
-#         print(num_bits)
-# BER = math.log10(num_bits/(75*sym_blk*num_blk))
-# print(BER)
+        print(num_bits)
+        break
+BER = math.log10(num_bits/(75*sym_blk*num_blk))
+print(BER)
