@@ -89,16 +89,21 @@ for epoch in range(2):
     running_loss = 0.0
     for i, data in enumerate(files_ind,0):
         sample_indices = list(range(num_blk*data,num_blk*(data+1)))
+        hidden = torch.zeros((2*cir_length)).to(dev)
+        act_channels = torch.zeros((num_blk,2*cir_length)).to(dev)
+        pred_channels = torch.zeros((num_blk,2*cir_length)).to(dev)
         for k in iter(sample_indices):
+            index = k % num_blk
             sample = trainset[k]
             usb, r, h_ls, h = sample['usb'].to(dev), sample['r'].to(dev), sample['h_ls'].to(dev), sample['h'].to(dev)
+            pred_channels[index,:] = h
             optimizer.zero_grad()
-            hidden = torch.zeros((2*cir_length)).to(dev)
             hidden = net(torch.cat((usb,r,h_ls)).float().to(dev),hidden)
-            loss = criterion(hidden, h)
-            loss.backward()
-            running_loss += loss.item()
-            optimizer.step()
+            act_channels[index,:] = hidden
+        loss = criterion(hidden, h)
+        loss.backward()
+        running_loss += loss.item()
+        optimizer.step()
         print("File ", i+1, " Done!")
         if (i+1) % 100 == 0:
             print('[%d, %5d] loss: %f' %
