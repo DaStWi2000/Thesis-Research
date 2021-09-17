@@ -1,18 +1,18 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from RNNModule import RNNModule
 
 class ChEst(nn.Module):
-    def __init__(self, cir_length):
+    def __init__(self, cir_length, sym_blk):
         super(ChEst,self).__init__()
-        self.fc1 = nn.Linear(1+2+cir_length*2+cir_length*2,512)
-        self.fc2 = nn.Linear(512,256)
-        self.fc3 = nn.Linear(256,128)
-        self.fc4 = nn.Linear(128,cir_length*2)
+        template = RNNModule(cir_length)
+        self.chest_network = nn.ModuleList([template for i in range(0,sym_blk)])
+        self.row_num = sym_blk
+        self.col_num = 2*cir_length
 
-    def forward(self,x,hidden):
-        x = F.relu(self.fc1(torch.cat((hidden, x))))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
-        return x
+    def forward(self,x):
+        est_channel = torch.zeros((self.row_num,self.col_num))
+        est_channel[0,:] = self.chest_network[0](x[0,:],torch.zeros(self.col_num))
+        for i in range(1, self.row_num):
+            est_channel[i,:] = self.chest_network[i](x[i,:],est_channel[i-1,:])
+        return est_channel
