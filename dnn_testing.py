@@ -16,6 +16,19 @@ num_files = 500
 num_blk = math.floor(sr/sym_blk)
 cir_length = 200
 
+max_cirmat_r =  3.5659
+min_cirmat_r = -2.8147
+max_ls_r =  3.3768
+min_ls_r = -2.5823
+max_y_r =  5.7941
+min_y_r = -5.8640
+max_cirmat_i =  3.2713
+min_cirmat_i = -2.9753
+max_ls_i =  3.0532
+min_ls_i = -2.4391
+max_y_i =  5.6099
+min_y_i = -5.6211
+
 # Look into MATLAB DNN package to import Pytorch model
 dev = ""
 if torch.cuda.is_available():
@@ -24,34 +37,25 @@ else:
   dev = "cpu"
 print(dev, "used")
 net = torch.load("model")
-# testset = ChEstDataset(r"Dataset", SNR, True)
-testset = ChEstDataset(r"Dataset", SNR, False)
-# files_ind = list(range(0,len(testset)))
-files_ind = [0]
-num_bits = 0
+testset = ChEstDataset(r"Dataset", SNR, True)
+files_ind = list(range(0,len(testset)))
 with torch.no_grad():
     for i, data in enumerate(files_ind,0):
-        sample_indices = list(range(0,num_blk))
         est_channel = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
         act_channel = torch.zeros((num_blk*sym_blk,2*cir_length)).to(dev)
         sample = testset[i]
-        for idx in iter(sample_indices):
-            usb, r, h_ls, h = torch.tensor(sample['usb'][idx*sym_blk:(idx+1)*sym_blk]).to(dev), \
-                sample['r'][idx*sym_blk:(idx+1)*sym_blk], \
-                sample['h_ls'][idx], \
-                sample['h'][idx*sym_blk:(idx+1)*sym_blk]
-            usb = (usb+1)/2
-            r = torch.tensor(numpy.concatenate((r.real,r.imag),axis=1)).to(dev)
-            r = (r-torch.min(r))/(torch.max(r)-torch.min(r))
-            h_ls = torch.tensor(numpy.concatenate((h_ls.real,h_ls.imag),axis=0)).repeat(sym_blk,1)
-            h_ls = (h_ls-torch.min(h_ls))/(torch.max(h_ls)-torch.min(h_ls))
-            blk_input = torch.cat((usb,r,h_ls),axis=1)
-            est_channel = net(blk_input)*(torch.max(h_ls)-torch.min(h_ls))+torch.min(h_ls)
-            act_channel[idx*sym_blk:(idx+1)*sym_blk,:] = h
-        numpy.savetxt("h.csv", act_channel.to("cpu").numpy()/10, delimiter=",")
-        numpy.savetxt("h_hat.csv", est_channel.to("cpu").numpy()/10, delimiter=",")
+        usb, r, h_ls, h = torch.tensor(sample['usb'][0:num_blk*sym_blk]).to(dev), \
+            sample['r'][0:num_blk*sym_blk], \
+            sample['h_ls'], \
+            sample['h'][0:num_blk*sym_blk]
+        usb = torch.reshape((usb+1)/2, (num_blk,sym_blk))
+        r = torch.reshape(torch.tensor(numpy.concatenate(((r.real-min_y_r)/(max_y_r-min_y_r),(r.imag-min_y_i)/(max_y_i-min_y_i)),axis=1)), (num_blk,sym_blk*2)).to(dev)
+        h_ls = torch.tensor(numpy.concatenate(((h_ls.real-min_ls_r)/(max_ls_r-min_ls_r),(h_ls.imag-min_ls_i)/(max_ls_i-min_ls_i)),axis=1)).to(dev)
+        h = torch.reshape(torch.tensor(numpy.concatenate(((h.real-min_cirmat_r)/(max_cirmat_r-min_cirmat_r),(h.imag-min_cirmat_i)/(max_cirmat_i-min_cirmat_i)),axis=1)), (num_blk*sym_blk,cir_length*2)).to(dev)
+        blk_input = torch.cat((usb,r,h_ls),axis=1)
+        est_channel = net(blk_input)
+        act_channel = h
+        numpy.savetxt("h.csv", act_channel.to("cpu").numpy()*(max_cirmat_r-min_cirmat_r)+min_cirmat_r, delimiter=",")
+        numpy.savetxt("h_hat.csv", est_channel.to("cpu").numpy()*(max_cirmat_r-min_cirmat_r)+min_cirmat_r, delimiter=",")
         print("File ", i+1, " Done!")
-        print(num_bits)
         break
-BER = math.log10(num_bits/(75*sym_blk*num_blk))
-print(BER)
