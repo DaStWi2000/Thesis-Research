@@ -7,9 +7,10 @@
 clear all; clc; close all;
 %% ****** parameters ******%%
 % case 1
-% h= [0.04 -0.05 0.07 -0.21 -0.5 0.72 0.36 0 0.21 0.03 0.07].'; %channel A
+%h= [0.04 -0.05 0.07 -0.21 -0.5 0.72 0.36 0 0.21 0.03 0.07].'; %channel A
+h= [.04 -.05].';
 % case 2
-load('exp_cir.mat','h','cot_all')  % channel from 2016Gulf
+%load('exp_cir.mat','h','cot_all')  % channel from 2016Gulf
 
 cir_length = length(h);% channel order
 sr = 5e3; % symbol rate
@@ -17,21 +18,23 @@ duration = 1; % in s
 N_sym = round(sr*duration); %data length
 blk_len = 2*cir_length;% observation window size
 
-for snr = 0:5:20
-    for batch = 1:75
+for snr = 20
+    for batch = 1:100
         clearvars -except cir_length sr duration N_sym blk_len batch snr cot_all h
         vInfo=randi(2, [N_sym, 1])-1;
         tx_symbols=2*vInfo-1;           %Mapping
 
         %% ****** tv channel generation ******%%
         % case 1
-        % tv_path_idx = [4,5]; % the tap that is time-varying
-        % cot_all = [0.036,0.05]; % coherent time
+        %tv_path_idx = 2:11; % the tap that is time-varying
+        %cot_all = [0.036,0.05,.048,.03,.033,.04,.037,.043,.026,.032]; % coherent time
+        tv_path_idx = 2;
+        cot_all = .036;
 
         % case 2
-        tv_path_idx_tmp = find(h~=0);
-        tv_path_idx = tv_path_idx_tmp(2:14);% the tap that is time-varying
-        cot_all_cpy = cot_all(2:14); % first tap assumed static
+%         tv_path_idx_tmp = find(h~=0);
+%         tv_path_idx = tv_path_idx_tmp(2:14);% the tap that is time-varying
+        cot_all_cpy = cot_all; % first tap assumed static
 
         [tvcir_tmp,~,~] = tv_cir_gen(sr, cot_all_cpy,duration);
         cir_mat_tmp  = repmat(h.',N_sym,1);
@@ -60,8 +63,8 @@ for snr = 0:5:20
         %------ add noise ------%
         N0 = 10^(-snr/10); % in (w)
         noise = sqrt(N0/2)*(randn(1,N_sym)+1i*randn(1,N_sym));% noise
-        y = rx+noise.'; % noisy
-
+        %y = rx+noise.'; % noisy
+        y = rx;
         %% ****** Channel estimation ******%%
         blk_n = floor(N_sym/blk_len);
         cirmat_ls = zeros(blk_n,cir_length);
@@ -71,7 +74,10 @@ for snr = 0:5:20
             end
             rx_blk_symbols = y((blk_idx-1)*blk_len+1:blk_idx*blk_len);
             %------ LS channel estimation ------%
-            p_LS = (A_mtx'*A_mtx)\(A_mtx'); % LS matrix
+            p_LS = (A_mtx'*A_mtx + 1e-12*eye(2))\(A_mtx'); % LS matrix
+            if p_LS ~= p_LS
+                p_LS
+            end
             h_est_LS =  (p_LS*rx_blk_symbols).';% LS estimate
             cirmat_ls(blk_idx,:) = h_est_LS;
         end
@@ -90,6 +96,6 @@ for snr = 0:5:20
         %   r_sum(count) = cirmat(count,:)*[tx_symbols(count:-1:(1+max(0,count-200)));zeros(max(200-count,0),1)];
         % end
 
-        save(['tv_test_',num2str(snr),'_',num2str(batch),'.mat'],'tx_symbols','cirmat','cirmat_ls','y')
+        save(['tv_basic_',num2str(batch),'.mat'],'tx_symbols','cirmat','cirmat_ls','y')
     end
 end
