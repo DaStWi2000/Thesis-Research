@@ -17,7 +17,7 @@ sr = 5000
 cir_length = 2
 sym_blk = cir_length*2
 #num_blk = sr//sym_blk
-num_blk = 5
+num_blk = 20
 num_epochs = 1000
 
 #Scaling Factors
@@ -69,6 +69,7 @@ batch_loss = list()
 #Trains the Neural Network for num_epochs epochs
 for epoch in range(num_epochs):
     #Training set
+    running_loss_train = 0.0
     for i, data in enumerate(training_ind,0):
         #Zeros out the gradiant of the optimizer
         optimizer.zero_grad()
@@ -112,10 +113,11 @@ for epoch in range(num_epochs):
         optimizer.step()
         #Updates status
         print("File ", i+1, " Done! Loss: ", loss.item())
-        batch_loss.append(loss.item())
+        running_loss_train += loss.item()
+    batch_loss.append(running_loss_train/len(training_ind))
     #Validation set
     with torch.no_grad():
-        running_loss = 0.0
+        running_loss_val = 0.0
         for i, data in enumerate(val_ind):
             #Gets a random sample (set of blocks) and reads in the values
             sample = trainset[data]
@@ -143,9 +145,9 @@ for epoch in range(num_epochs):
             act_channel = torch.tensor(numpy.concatenate((h.real,h.imag),axis=1)).float().to(dev)
             #Computes the loss
             loss = criterion(est_channel, act_channel)
-            running_loss += loss.item()
+            running_loss_val += loss.item()
         #Updates status
-        val_loss.append(running_loss/len(val_ind))
+        val_loss.append(running_loss_val/len(val_ind))
 
 #Saves the current model
 torch.save(tinynet, "model"+str(epoch))

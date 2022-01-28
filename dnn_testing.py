@@ -16,7 +16,7 @@ sr = 5000
 cir_length = 2
 sym_blk = cir_length*2
 # num_blk = sr//sym_blk
-num_blk = 5
+num_blk = 20
 
 #Scaling Factors
 max_cirmat_r = 0.1708
