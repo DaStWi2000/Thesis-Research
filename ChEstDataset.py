@@ -11,7 +11,7 @@ class ChEstDataset(torch.utils.data.Dataset):
                 if file.startswith("tv_test_"+str(SNR)):
                     self.mat_files.append(os.path.join(root_dir,file))
             else:
-                if file.startswith("tv_"+str(SNR)):
+                if file.startswith("tv_basic"):
                     self.mat_files.append(os.path.join(root_dir,file))
 
     def __len__(self):
