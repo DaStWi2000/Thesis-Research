@@ -45,7 +45,7 @@ print(dev, "used")
 
 #Initializes channel estimator of cir_length taps with sym_blk number of symbols
 #tinynet = RNNModule(cir_length, sym_blk, num_blk).to(dev)
-tinynet = CustomRNN(cir_length, sym_blk, num_blk).to(dev)
+tinynet = CustomRNN(cir_length, sym_blk, num_blk, dev).to(dev)
 #Uses MSE (L2 Norm)
 criterion = nn.MSELoss()
 #Uses Adaptive Moment Estimation
@@ -92,10 +92,9 @@ for epoch in range(num_epochs):
             h_ls = (h_ls.real-min_ls_r)/(max_ls_r-min_ls_r)
             h = (h.real-min_cirmat_r)/(max_cirmat_r-min_cirmat_r)
         #Concatenates all the columns together as input into the neural network
-        blk_input = torch.tensor(numpy.concatenate((usb.real, r.real, h_ls.real, usb.imag, r.imag, h_ls.imag),axis=1)).float().to(dev)
+        blk_input = torch.tensor(numpy.concatenate((usb.real, r.real, h_ls.real, usb.imag, r.imag, h_ls.imag),axis=1),device=dev).float()
         #Initializes estimated channel
-        est_channel = torch.zeros((num_blk*sym_blk,cir_length*2))
-        act_channel = torch.tensor(numpy.concatenate((h.real,h.imag),axis=1)).float().to(dev)
+        act_channel = torch.tensor(numpy.concatenate((h.real,h.imag),axis=1),device=dev).float()
         # tmp = tinynet(blk_input[0,:], torch.zeros((sym_blk*cir_length*2)))
         # for k in range(0, num_blk-1):
         #     est_channel[k*sym_blk:(k+1)*sym_blk,:] = tmp.reshape((sym_blk,cir_length*2))
@@ -138,14 +137,7 @@ for epoch in range(num_epochs):
                 h = (h.real-min_cirmat_r)/(max_cirmat_r-min_cirmat_r)
             #Concatenates all the columns together as input into the neural network
             blk_input = torch.tensor(numpy.concatenate((usb.real, r.real, h_ls.real, usb.imag, r.imag, h_ls.imag),axis=1)).float().to(dev)
-            #Initializes estimated channel
-            est_channel = torch.zeros((num_blk*sym_blk,cir_length*2))
             #Gets the output of the neural network for this collection of blocks
-            # tmp = tinynet(blk_input[0,:], torch.zeros((sym_blk*cir_length*2)))
-            # for k in range(0, num_blk-1):
-            #     est_channel[k*sym_blk:(k+1)*sym_blk,:] = tmp.reshape((sym_blk,cir_length*2))
-            #     tmp = tinynet(blk_input[k+1,:],tmp)
-            # est_channel[(num_blk-1)*sym_blk:,:] = tmp.reshape((sym_blk,cir_length*2))
             est_channel = tinynet(blk_input)
             #Converts the actual channel to a float
             act_channel = torch.tensor(numpy.concatenate((h.real,h.imag),axis=1)).float().to(dev)
@@ -154,8 +146,9 @@ for epoch in range(num_epochs):
             running_loss += loss.item()
         #Updates status
         val_loss.append(running_loss/len(val_ind))
-    #Saves the current model
-    torch.save(tinynet, "model"+str(epoch))
+
+#Saves the current model
+torch.save(tinynet, "model"+str(epoch))
 #Writes the losses to a file
 with open("losses.csv", "w") as file:
     for item in val_loss:

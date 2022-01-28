@@ -43,10 +43,11 @@ print(dev, "used")
 
 #Loads in user specified model
 tinynet = torch.load("model999")
+test_loss = list()
 
 #Sets the training set to the SNR testing set
 testset = ChEstDataset(r"Dataset", SNR, False)
-files_ind = list(range(0,len(testset)))
+files_ind = list(range(round(0.7*len(testset)),len(testset)))
 #Testing set
 with torch.no_grad():
     for i, data in enumerate(files_ind):
@@ -70,28 +71,25 @@ with torch.no_grad():
             h = torch.tensor((h.real-min_cirmat_r)/(max_cirmat_r-min_cirmat_r),torch.zeros(h.size())).to(dev)
         #Concatenates all the columns together as input into the neural network
         blk_input = torch.tensor(numpy.concatenate((usb.real, r.real, h_ls.real, usb.imag, r.imag, h_ls.imag),axis=1)).float().to(dev)
-        #Initializes estimated channel
-        # est_channel = torch.zeros((num_blk*sym_blk,cir_length*2))
         #Gets the output of the neural network for this collection of blocks
-        #Gets the output of the neural network for this collection of blocks
-        # tmp = tinynet(blk_input[0,:], torch.zeros((sym_blk*cir_length*2)))
-        # for k in range(0, num_blk-1):
-        #     est_channel[k*sym_blk:(k+1)*sym_blk,:] = tmp.reshape((sym_blk,cir_length*2))
-        #     tmp = tinynet(blk_input[k+1,:],tmp)
-        # est_channel[(num_blk-1)*sym_blk:,:] = tmp.reshape((sym_blk,cir_length*2))
         est_channel = tinynet(blk_input)
 
-        #Saves all information to mat files
+        #Convert back into usable channel matrices
         est_channel = est_channel.to("cpu").numpy()
         act_channel = h.to("cpu").numpy()
         ls_channel = h_ls
-        scipy.io.savemat("cirmat_prescale.mat", {'h': act_channel, 'h_est': est_channel, 'h_ls': ls_channel})
         act_channel = act_channel[:,0:cir_length]*(max_cirmat_r-min_cirmat_r)+min_cirmat_r+1j*act_channel[:,cir_length:]*(max_cirmat_i-min_cirmat_i)+min_cirmat_i*1j
         est_channel = est_channel[:,0:cir_length]*(max_cirmat_r-min_cirmat_r)+min_cirmat_r+1j*est_channel[:,cir_length:]*(max_cirmat_i-min_cirmat_i)+min_cirmat_i*1j
         if max_ls_i-min_ls_i > 0:
             ls_channel = ls_channel.real*(max_ls_r-min_ls_r)+min_ls_r+1j*ls_channel.imag*(max_ls_i-min_ls_i)+min_ls_i*1j
         else:
             ls_channel = ls_channel.real*(max_ls_r-min_ls_r)+min_ls_r
-        scipy.io.savemat("cirmat.mat", {'h': act_channel, 'h_est': est_channel, 'h_ls': ls_channel})
+
+        #Computes True MSE of ChEst
+        test_loss.append((numpy.abs(numpy.square(est_channel-act_channel))).mean(axis=None))
         print("File ", i+1, " Done!")
-        break
+
+#Saves all MSEs to CSV file
+with open("val_loss.csv", "w") as file:
+    for item in test_loss:
+        file.write(str(item)+",")
