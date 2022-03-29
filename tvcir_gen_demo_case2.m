@@ -13,10 +13,25 @@ load('exp_cir.mat','h','cot_all')  % channel from 2016Gulf
 h_keep = h;
 cot_all_keep = cot_all;
 
-num_files = 500;
+num_files = 75;
 for file_num = 1:num_files
     h = h_keep;
     cot_all = cot_all_keep;
+
+    %% ****** tv channel generation ******%%
+    % case 1
+    % tv_path_idx = [4,5]; % the tap that is time-varying
+    % cot_all = [0.036,0.05]; % coherent time
+
+    % case 2
+    % tv_path_idx_tmp = find(h~=0);
+    % tv_path_idx = tv_path_idx_tmp(2:14);% the tap that is time-varying
+    % cot_all = cot_all(2:14); % first tap assumed static
+    tv_path_idx_tmp = find(h~=0);
+    h = h(tv_path_idx_tmp(1:2));
+    tv_path_idx = [2];
+    cot_all = cot_all(2);
+    
     cir_length = length(h);% channel order
     sr = 5e3; % symbol rate
     duration = 1; % in s
@@ -26,17 +41,7 @@ for file_num = 1:num_files
 
     vInfo=randi(2, [N_sym, 1])-1;
     tx_symbols=2*vInfo-1;           %Mapping
-
-    %% ****** tv channel generation ******%%
-    % case 1
-    % tv_path_idx = [4,5]; % the tap that is time-varying
-    % cot_all = [0.036,0.05]; % coherent time
-
-    % case 2
-    tv_path_idx_tmp = find(h~=0);
-    tv_path_idx = tv_path_idx_tmp(2:14);% the tap that is time-varying
-    cot_all = cot_all(2:14); % first tap assumed static
-
+    
     [tvcir_tmp,~,~] = tv_cir_gen(sr, cot_all,duration);
     cir_mat_tmp  = repmat(h.',N_sym,1);
     cirmat = cir_mat_tmp;
@@ -76,8 +81,12 @@ for file_num = 1:num_files
         rx_blk_symbols = y((blk_idx-1)*blk_len+1:blk_idx*blk_len);
         %------ LS channel estimation ------%
         p_LS = (A_mtx'*A_mtx)\(A_mtx'); % LS matrix
-        h_est_LS =  (p_LS*rx_blk_symbols).';% LS estimate
+        if p_LS ~= p_LS
+            h_est_LS = cirmat_ls(blk_idx-1,:);
+        else
+            h_est_LS =  (p_LS*rx_blk_symbols).';% LS estimate
+        end
         cirmat_ls(blk_idx,:) = h_est_LS;
     end
-    save(['Dataset\\tv_',num2str(snr),'_',num2str(file_num),'.mat'],'tx_symbols','cirmat','cirmat_ls','y')
+    save(['Dataset\\tv_simple_test_',num2str(snr),'_',num2str(file_num),'.mat'],'tx_symbols','cirmat','cirmat_ls','y')
 end
