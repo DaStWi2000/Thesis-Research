@@ -129,7 +129,9 @@ dmypy.json
 .pyre/
 
 #Ignore Dataset
-Dataset/*
+*.mat
+*.asv
+*.csv
 
 #Ignore model
-model
+*model*
